@@ -2,10 +2,13 @@ package fyneline
 
 import (
 	"image/color"
+	"math"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/driver/software"
 	"fyne.io/fyne/v2/test"
 )
 
@@ -54,16 +57,37 @@ func TestBarChartExplicitEmptyCategoryDoesNotCallAccessor(t *testing.T) {
 }
 
 func TestAreaChartRendersFilledIntervals(t *testing.T) {
-	test.NewTempApp(t)
+	app := test.NewTempApp(t)
 	data := []testDatum{{x: 0, a: 1}, {x: 1, a: 3}, {x: 2, a: 2}}
+	fill := color.NRGBA{R: 240, G: 10, B: 20, A: 255}
 	chart := NewAreaChart(data,
 		func(d testDatum) float64 { return d.x },
-		NewAreaSeries("A", func(d testDatum) float64 { return d.a }),
+		NewAreaSeries("A", func(d testDatum) float64 { return d.a }).WithStyle(AreaStyle{
+			Fill: FillStyle{Color: fill, Opacity: 1},
+		}),
 	)
 
 	objects := renderObjects(t, chart)
 	if got := countObjects[*canvas.ArbitraryPolygon](objects); got != 2 {
 		t.Fatalf("rendered %d area intervals, want 2", got)
+	}
+	for _, object := range objects {
+		if polygon, ok := object.(*canvas.ArbitraryPolygon); ok && (polygon.Size().Width == 0 || polygon.Size().Height == 0) {
+			t.Fatalf("area polygon has empty bounds: %v", polygon.Size())
+		}
+	}
+	image := software.Render(chart, app.Settings().Theme())
+	filledPixels := 0
+	for y := image.Bounds().Min.Y; y < image.Bounds().Max.Y; y++ {
+		for x := image.Bounds().Min.X; x < image.Bounds().Max.X; x++ {
+			r, g, b, _ := image.At(x, y).RGBA()
+			if r > 0xc000 && g < 0x4000 && b < 0x4000 {
+				filledPixels++
+			}
+		}
+	}
+	if filledPixels < 100 {
+		t.Fatalf("area fill painted only %d pixels", filledPixels)
 	}
 }
 
@@ -172,6 +196,46 @@ func TestStackLayouts(t *testing.T) {
 	}
 }
 
+func TestUndefinedStackValueDoesNotAdvanceBaseline(t *testing.T) {
+	values := [][]float64{{100}, {3}}
+	defined := [][]bool{{false}, {true}}
+	for _, layout := range []SeriesLayout{SeriesStack, SeriesStackExpand, SeriesStackDiverging} {
+		lower, upper := barStack(values, defined, layout)
+		if lower[1][0] != 0 {
+			t.Fatalf("layout %v baseline = %v, want 0", layout, lower[1][0])
+		}
+		if layout != SeriesStackExpand && upper[1][0] != 3 {
+			t.Fatalf("layout %v upper = %v, want 3", layout, upper[1][0])
+		}
+	}
+}
+
+func TestGroupedAndStackPaddedBarsRemainCentered(t *testing.T) {
+	test.NewTempApp(t)
+	data := []testDatum{{category: "A", a: 2, b: 3}}
+	for _, layout := range []SeriesLayout{SeriesGroup, SeriesStack} {
+		chart := NewBarChart(data,
+			func(d testDatum) string { return d.category },
+			NewBarSeries("A", func(d testDatum) float64 { return d.a }),
+			NewBarSeries("B", func(d testDatum) float64 { return d.b }),
+		).SetSeriesLayout(layout).SetGroupPadding(0.2).SetStackPadding(0.2)
+		objects := renderObjects(t, chart)
+		left, right := float32(math.Inf(1)), float32(math.Inf(-1))
+		for _, object := range objects {
+			if bar, ok := object.(*canvas.Rectangle); ok {
+				left = min(left, bar.Position().X)
+				right = max(right, bar.Position().X+bar.Size().Width)
+			}
+		}
+		plot := cartesianPlot(fyne.NewSize(400, 240), Insets{}, true, true)
+		plot = fitCategoryAxisMargin(chart, plot, chart.categoryAxis, []string{"A"}, true)
+		plot = fitNumericAxisMargin(chart, plot, chart.valueAxis, Domain{Min: 0, Max: 5}, false)
+		if difference := math.Abs(float64((left+right)/2 - (plot.left+plot.right)/2)); difference > 0.01 {
+			t.Fatalf("layout %v is off-center by %v", layout, difference)
+		}
+	}
+}
+
 func TestCurvePoints(t *testing.T) {
 	points := []fyne.Position{fyne.NewPos(0, 10), fyne.NewPos(10, 0), fyne.NewPos(20, 10)}
 	if got := len(curvePoints(points, CurveLinear)); got != 3 {
@@ -182,6 +246,78 @@ func TestCurvePoints(t *testing.T) {
 	}
 	if got := len(curvePoints(points, CurveMonotoneX)); got != 21 {
 		t.Fatalf("monotone point count = %d, want 21", got)
+	}
+}
+
+func TestMonotoneCurveDoesNotOvershootUnevenIntervals(t *testing.T) {
+	points := []fyne.Position{fyne.NewPos(0, 0), fyne.NewPos(1, 100), fyne.NewPos(100, 101)}
+	curved := curvePoints(points, CurveMonotoneX)
+	for index, point := range curved {
+		minimum, maximum := float32(0), float32(100)
+		if index > 10 {
+			minimum, maximum = 100, 101
+		}
+		if point.Y < minimum || point.Y > maximum {
+			t.Fatalf("point %d overshot interval: %v not in [%v, %v]", index, point.Y, minimum, maximum)
+		}
+	}
+}
+
+func TestMonotoneCurveDoesNotReverseInsideIncreasingIntervals(t *testing.T) {
+	points := []fyne.Position{
+		fyne.NewPos(0, 0), fyne.NewPos(1, 19),
+		fyne.NewPos(2, 20), fyne.NewPos(3, 39),
+	}
+	curved := curvePoints(points, CurveMonotoneX)
+	for index := 1; index < len(curved); index++ {
+		if curved[index].Y < curved[index-1].Y {
+			t.Fatalf("curve reversed at point %d: %v then %v", index, curved[index-1].Y, curved[index].Y)
+		}
+	}
+}
+
+func TestTimeAccessorSupportsDatesOutsideUnixNanoRange(t *testing.T) {
+	timestamp := time.Date(2500, time.January, 1, 0, 0, 0, 500_000_000, time.UTC)
+	accessor := TimeAccessor(func(value time.Time) time.Time { return value })
+	want := float64(timestamp.Unix()) + 0.5
+	if got := accessor(timestamp); got != want {
+		t.Fatalf("TimeAccessor = %v, want %v", got, want)
+	}
+}
+
+func TestArcSettersRejectNonFiniteGeometry(t *testing.T) {
+	test.NewTempApp(t)
+	chart := NewArcChart([]float64{1}, func(value float64) float64 { return value }, func(float64) string { return "" }).
+		SetInnerRadius(float32(math.NaN())).
+		SetOuterRadius(float32(math.Inf(1))).
+		SetCornerRadius(float32(math.NaN()))
+	if chart.innerRadius != 0 || chart.outerRadius != 1 || chart.cornerRadius != 0 {
+		t.Fatalf("invalid geometry retained: inner=%v outer=%v corner=%v", chart.innerRadius, chart.outerRadius, chart.cornerRadius)
+	}
+}
+
+func TestNumericAxisMarginExpandsForWideLabels(t *testing.T) {
+	test.NewTempApp(t)
+	chart := NewSpline([]testDatum{{x: 1, a: 1}}, func(d testDatum) float64 { return d.x }, NewSplineSeries("A", func(d testDatum) float64 { return d.a }))
+	axis := NewNumericAxis().WithFormatter(func(float64) string { return "a very wide tick label" })
+	base := cartesianPlot(fyne.NewSize(400, 240), Insets{}, true, true)
+	fitted := fitNumericAxisMargin(chart, base, axis, Domain{Min: 0, Max: 1}, false)
+	if fitted.left <= base.left {
+		t.Fatalf("left margin did not expand: base=%v fitted=%v", base.left, fitted.left)
+	}
+}
+
+func TestAxisMarginsCannotInvertPlot(t *testing.T) {
+	test.NewTempApp(t)
+	chart := NewSpline([]testDatum{{x: 1, a: 1}}, func(d testDatum) float64 { return d.x }, NewSplineSeries("A", func(d testDatum) float64 { return d.a }))
+	axis := NewNumericAxis().WithFormatter(func(float64) string {
+		return "a label much wider than the entire chart"
+	}).WithStyle(AxisStyle{TextSize: 200})
+	plot := cartesianPlot(fyne.NewSize(100, 80), Insets{}, true, true)
+	plot = fitNumericAxisMargin(chart, plot, axis, Domain{Min: 0, Max: 1}, false)
+	plot = fitNumericAxisMargin(chart, plot, axis, Domain{Min: 0, Max: 1}, true)
+	if plot.left >= plot.right || plot.top >= plot.bottom {
+		t.Fatalf("axis margins inverted plot: %+v", plot)
 	}
 }
 

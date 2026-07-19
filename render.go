@@ -87,6 +87,67 @@ func cartesianPlot(size fyne.Size, padding Insets, xVisible, yVisible bool) plot
 	return plotRect{left: left, top: top, right: right, bottom: bottom}
 }
 
+func fitNumericAxisMargin(widget fyne.Widget, plot plotRect, axis NumericAxis, domain Domain, horizontal bool) plotRect {
+	if !axis.visible {
+		return plot
+	}
+	textSize := axis.style.TextSize
+	if textSize <= 0 {
+		textSize = theme.CurrentForWidget(widget).Size(theme.SizeNameCaptionText)
+	}
+	if horizontal {
+		required := fyne.MeasureText("0", textSize, fyne.TextStyle{}).Height + 5
+		if axis.label != "" {
+			required += fyne.MeasureText(axis.label, textSize, fyne.TextStyle{Bold: true}).Height + 2
+		}
+		plot.bottom = max(plot.top+1, plot.bottom-max(required-28, 0))
+		return plot
+	}
+	maximumWidth := float32(0)
+	count := max(axis.tickCount, 2)
+	for index := 0; index < count; index++ {
+		value := domain.Min + float64(index)/float64(count-1)*(domain.Max-domain.Min)
+		maximumWidth = max(maximumWidth, fyne.MeasureText(formatNumber(axis, value), textSize, fyne.TextStyle{}).Width)
+	}
+	required := maximumWidth + 6
+	if axis.label != "" {
+		required += fyne.MeasureText(axis.label, textSize, fyne.TextStyle{Bold: true}).Width + 6
+	}
+	plot.left = min(plot.right-1, plot.left+max(required-44, 0))
+	return plot
+}
+
+func fitCategoryAxisMargin(widget fyne.Widget, plot plotRect, axis CategoryAxis, categories []string, horizontal bool) plotRect {
+	if !axis.visible {
+		return plot
+	}
+	textSize := axis.style.TextSize
+	if textSize <= 0 {
+		textSize = theme.CurrentForWidget(widget).Size(theme.SizeNameCaptionText)
+	}
+	if horizontal {
+		required := fyne.MeasureText("0", textSize, fyne.TextStyle{}).Height + 5
+		if axis.label != "" {
+			required += fyne.MeasureText(axis.label, textSize, fyne.TextStyle{Bold: true}).Height + 2
+		}
+		plot.bottom = max(plot.top+1, plot.bottom-max(required-28, 0))
+		return plot
+	}
+	maximumWidth := float32(0)
+	for _, category := range categories {
+		if axis.formatter != nil {
+			category = axis.formatter(category)
+		}
+		maximumWidth = max(maximumWidth, fyne.MeasureText(category, textSize, fyne.TextStyle{}).Width)
+	}
+	required := maximumWidth + 6
+	if axis.label != "" {
+		required += fyne.MeasureText(axis.label, textSize, fyne.TextStyle{Bold: true}).Width + 6
+	}
+	plot.left = min(plot.right-1, plot.left+max(required-44, 0))
+	return plot
+}
+
 func numericDomain(axis NumericAxis, minimum, maximum float64, includeZero bool) Domain {
 	if axis.hasDomain {
 		minimum, maximum = axis.domain.Min, axis.domain.Max
@@ -209,7 +270,15 @@ func numericAxis(widget fyne.Widget, plot plotRect, axis NumericAxis, domain Dom
 		if horizontal {
 			text.Move(fyne.NewPos(plot.left+(plot.width()-measured.Width)/2, plot.bottom+18))
 		} else {
-			text.Move(fyne.NewPos(max(plot.left-measured.Width-6, 0), plot.top))
+			maximumTickWidth := float32(0)
+			for index := 0; index < count; index++ {
+				value := domain.Min + float64(index)/float64(count-1)*(domain.Max-domain.Min)
+				maximumTickWidth = max(maximumTickWidth, fyne.MeasureText(formatNumber(axis, value), textSize, fyne.TextStyle{}).Width)
+			}
+			text.Move(fyne.NewPos(
+				max(plot.left-maximumTickWidth-measured.Width-12, 0),
+				plot.top+(plot.height()-measured.Height)/2,
+			))
 		}
 		objects = append(objects, text)
 	}
@@ -267,7 +336,17 @@ func renderCategoryAxis(widget fyne.Widget, plot plotRect, axis CategoryAxis, ca
 		if horizontal {
 			text.Move(fyne.NewPos(plot.left+(plot.width()-measured.Width)/2, plot.bottom+18))
 		} else {
-			text.Move(fyne.NewPos(max(plot.left-measured.Width-6, 0), plot.top))
+			maximumCategoryWidth := float32(0)
+			for _, category := range categories {
+				if axis.formatter != nil {
+					category = axis.formatter(category)
+				}
+				maximumCategoryWidth = max(maximumCategoryWidth, fyne.MeasureText(category, textSize, fyne.TextStyle{}).Width)
+			}
+			text.Move(fyne.NewPos(
+				max(plot.left-maximumCategoryWidth-measured.Width-12, 0),
+				plot.top+(plot.height()-measured.Height)/2,
+			))
 		}
 		objects = append(objects, text)
 	}

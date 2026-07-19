@@ -129,11 +129,18 @@ func (c *BarChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 	if c.orientation == BarHorizontal {
 		xVisible, yVisible = c.valueAxis.visible, c.categoryAxis.visible
 	}
-	plot := cartesianPlot(size, c.padding, xVisible, yVisible)
 	values, defined := c.barValues(rows, present)
 	lower, upper := barStack(values, defined, c.seriesLayout)
 	minimum, maximum := barExtents(lower, upper, defined)
 	domain := numericDomain(c.valueAxis, minimum, maximum, true)
+	plot := cartesianPlot(size, c.padding, xVisible, yVisible)
+	if c.orientation == BarVertical {
+		plot = fitCategoryAxisMargin(c, plot, c.categoryAxis, categories, true)
+		plot = fitNumericAxisMargin(c, plot, c.valueAxis, domain, false)
+	} else {
+		plot = fitNumericAxisMargin(c, plot, c.valueAxis, domain, true)
+		plot = fitCategoryAxisMargin(c, plot, c.categoryAxis, categories, false)
+	}
 
 	objects := make([]fyne.CanvasObject, 0, len(categories)*max(len(c.series), 1)+24)
 	objects = append(objects, categoryGrid(c, plot, c.categoryAxis, len(categories), c.orientation == BarVertical)...)
@@ -200,7 +207,7 @@ func (c *BarChart[T]) renderBars(plot plotRect, domain Domain, values, lower, up
 		available = plot.height()
 	}
 	bandSlot := available / float32(categoryCount)
-	bandSize := bandSlot * (1 - c.bandPadding)
+	categoryBand := bandSlot * (1 - c.bandPadding)
 	objects := make([]fyne.CanvasObject, 0, categoryCount*seriesCount)
 	for categoryIndex := 0; categoryIndex < categoryCount; categoryIndex++ {
 		for seriesIndex, series := range c.series {
@@ -209,16 +216,16 @@ func (c *BarChart[T]) renderBars(plot plotRect, domain Domain, values, lower, up
 			}
 			start := lower[seriesIndex][categoryIndex]
 			end := upper[seriesIndex][categoryIndex]
-			barOffset, barSize := float32(0), bandSize
+			barOffset, barSize := float32(0), categoryBand
 			if c.seriesLayout == SeriesGroup {
-				barSize = bandSize / float32(seriesCount)
-				barOffset = float32(seriesIndex) * barSize
-				barSize *= 1 - c.groupPadding
+				groupSlot := categoryBand / float32(seriesCount)
+				barSize = groupSlot * (1 - c.groupPadding)
+				barOffset = float32(seriesIndex)*groupSlot + (groupSlot-barSize)/2
 			} else if c.seriesLayout == SeriesStack || c.seriesLayout == SeriesStackExpand || c.seriesLayout == SeriesStackDiverging {
-				barOffset = bandSize * c.stackPadding / 2
-				barSize *= 1 - c.stackPadding
+				barSize = categoryBand * (1 - c.stackPadding)
+				barOffset = (categoryBand - barSize) / 2
 			}
-			bandStart := float32(categoryIndex)*bandSlot + (bandSlot-bandSize)/2 + barOffset
+			bandStart := float32(categoryIndex)*bandSlot + (bandSlot-categoryBand)/2 + barOffset
 			style := series.style
 			opacity := style.Fill.Opacity
 			if opacity <= 0 {
@@ -267,6 +274,9 @@ func barStack(values [][]float64, defined [][]bool, layout SeriesLayout) ([][]fl
 			}
 		}
 		for series := range values {
+			if !defined[series][column] {
+				continue
+			}
 			value := values[series][column]
 			if layout == SeriesStackExpand && total != 0 {
 				value /= total

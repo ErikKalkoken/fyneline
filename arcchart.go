@@ -71,6 +71,9 @@ func (c *ArcChart[T]) SetRange(start, end float64) *ArcChart[T] {
 
 // SetInnerRadius sets the cutout as a fraction of the outer radius.
 func (c *ArcChart[T]) SetInnerRadius(fraction float32) *ArcChart[T] {
+	if !finite(float64(fraction)) {
+		fraction = 0
+	}
 	c.innerRadius = min(max(fraction, 0), 0.99)
 	c.Refresh()
 	return c
@@ -78,7 +81,7 @@ func (c *ArcChart[T]) SetInnerRadius(fraction float32) *ArcChart[T] {
 
 // SetOuterRadius sets the outer radius as a fraction of available space.
 func (c *ArcChart[T]) SetOuterRadius(fraction float32) *ArcChart[T] {
-	if fraction <= 0 {
+	if !finite(float64(fraction)) || fraction <= 0 {
 		fraction = 1
 	}
 	c.outerRadius = min(fraction, 1)
@@ -97,6 +100,9 @@ func (c *ArcChart[T]) SetPadAngle(degrees float64) *ArcChart[T] {
 
 // SetCornerRadius sets arc corner rounding in logical pixels.
 func (c *ArcChart[T]) SetCornerRadius(radius float32) *ArcChart[T] {
+	if !finite(float64(radius)) {
+		radius = 0
+	}
 	c.cornerRadius = max(radius, 0)
 	c.Refresh()
 	return c

@@ -130,7 +130,8 @@ func (a CategoryAxis) WithStyle(style AxisStyle) CategoryAxis {
 // TimeAccessor converts time values to Unix seconds for a continuous axis.
 func TimeAccessor[T any](accessor func(T) time.Time) func(T) float64 {
 	return func(datum T) float64 {
-		return float64(accessor(datum).UnixNano()) / float64(time.Second)
+		value := accessor(datum)
+		return float64(value.Unix()) + float64(value.Nanosecond())/float64(time.Second)
 	}
 }
 

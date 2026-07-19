@@ -99,8 +99,10 @@ func (c *Spline[T]) CreateRenderer() fyne.WidgetRenderer {
 func (c *Spline[T]) chartMinSize() fyne.Size { return c.minimumSize }
 
 func (c *Spline[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
-	plot := cartesianPlot(size, c.padding, c.xAxis.visible, c.yAxis.visible)
 	xValues, yValues, defined, xDomain, yDomain := c.values()
+	plot := cartesianPlot(size, c.padding, c.xAxis.visible, c.yAxis.visible)
+	plot = fitNumericAxisMargin(c, plot, c.xAxis, xDomain, true)
+	plot = fitNumericAxisMargin(c, plot, c.yAxis, yDomain, false)
 	objects := renderNumericAxes(c, plot, c.xAxis, c.yAxis, xDomain, yDomain)
 	for seriesIndex, series := range c.series {
 		segments := pointSegments(xValues, yValues[seriesIndex], defined[seriesIndex], c.gapPolicy, plot, xDomain, yDomain)

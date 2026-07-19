@@ -110,8 +110,10 @@ func (c *AreaChart[T]) CreateRenderer() fyne.WidgetRenderer {
 func (c *AreaChart[T]) chartMinSize() fyne.Size { return c.minimumSize }
 
 func (c *AreaChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
-	plot := cartesianPlot(size, c.padding, c.xAxis.visible, c.yAxis.visible)
 	xValues, values, defined, xDomain, yDomain, lower, upper := c.areaValues()
+	plot := cartesianPlot(size, c.padding, c.xAxis.visible, c.yAxis.visible)
+	plot = fitNumericAxisMargin(c, plot, c.xAxis, xDomain, true)
+	plot = fitNumericAxisMargin(c, plot, c.yAxis, yDomain, false)
 	objects := renderNumericAxes(c, plot, c.xAxis, c.yAxis, xDomain, yDomain)
 	for seriesIndex, series := range c.series {
 		segments := areaPointSegments(xValues, lower[seriesIndex], upper[seriesIndex], defined[seriesIndex], c.gapPolicy, plot, xDomain, yDomain)
@@ -135,6 +137,7 @@ func (c *AreaChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 					upperPoints[index-1], upperPoints[index],
 					lowerPoints[index], lowerPoints[index-1],
 				}, fill)
+				polygon.Resize(size)
 				objects = append(objects, polygon)
 				line := canvas.NewLine(stroke)
 				line.StrokeWidth = strokeWidth
