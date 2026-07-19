@@ -11,6 +11,23 @@ Fyneline currently provides `BarChart`, `AreaChart`, `ArcChart`, and `Spline`.
 Each is a regular `fyne.Widget` that can be passed directly to
 `Window.SetContent` or any Fyne container.
 
+## Example gallery
+
+The [`examples`](examples/) directory contains runnable projects and a Makefile
+that regenerates these captures with Fyne's software renderer.
+
+| BarChart | AreaChart |
+| --- | --- |
+| [![BarChart examples](examples/bar-chart/screenshot.png)](examples/bar-chart/) | [![AreaChart examples](examples/area-chart/screenshot.png)](examples/area-chart/) |
+
+| ArcChart | Spline |
+| --- | --- |
+| [![ArcChart examples](examples/arc-chart/screenshot.png)](examples/arc-chart/) | [![Spline examples](examples/spline/screenshot.png)](examples/spline/) |
+
+From the `examples` folder, run `make render` for every screenshot or
+`make render EXAMPLE=arc-chart` for one. See the
+[`examples` README](examples/README.md) for all targets.
+
 ## BarChart
 
 ```go
