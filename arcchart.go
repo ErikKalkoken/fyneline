@@ -187,7 +187,9 @@ func (c *ArcChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 		arc.StrokeColor = style.Stroke.Color
 		arc.StrokeWidth = max(style.Stroke.Width, 0)
 		arc.Resize(fyne.NewSize(diameter, diameter))
-		arc.Move(center)
+		// Fyne's painters currently treat Arc.Position as its top-left origin,
+		// despite the Canvas API documenting it as the center.
+		arc.Move(center.Subtract(fyne.NewPos(diameter/2, diameter/2)))
 		objects = append(objects, arc)
 		if c.labels && c.label != nil {
 			label := c.label(datum)

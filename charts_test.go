@@ -107,6 +107,12 @@ func TestArcChartSkipsNonPositiveValuesAndRendersLabels(t *testing.T) {
 	if got := countObjects[*canvas.Arc](objects); got != 2 {
 		t.Fatalf("rendered %d arcs, want 2", got)
 	}
+	for _, object := range objects {
+		arc, ok := object.(*canvas.Arc)
+		if ok && arc.Position().X+arc.Size().Width > 400 {
+			t.Fatalf("arc exceeds chart bounds: position=%v size=%v", arc.Position(), arc.Size())
+		}
+	}
 	if got := countObjects[*canvas.Text](objects); got != 2 {
 		t.Fatalf("rendered %d labels, want 2", got)
 	}

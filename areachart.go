@@ -133,12 +133,16 @@ func (c *AreaChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 			lowerPoints := curvePoints(segment.lower, c.curve)
 			count := min(len(upperPoints), len(lowerPoints))
 			for index := 1; index < count; index++ {
-				polygon := canvas.NewArbitraryPolygon([]fyne.Position{
-					upperPoints[index-1], upperPoints[index],
-					lowerPoints[index], lowerPoints[index-1],
-				}, fill)
-				polygon.Resize(size)
-				objects = append(objects, polygon)
+				// Degenerate vertical polygons confuse the vector triangulator used
+				// by stepped curves, so only fill intervals with non-zero width.
+				if upperPoints[index].X != upperPoints[index-1].X {
+					polygon := canvas.NewArbitraryPolygon([]fyne.Position{
+						upperPoints[index-1], upperPoints[index],
+						lowerPoints[index], lowerPoints[index-1],
+					}, fill)
+					polygon.Resize(size)
+					objects = append(objects, polygon)
+				}
 				line := canvas.NewLine(stroke)
 				line.StrokeWidth = strokeWidth
 				line.Position1 = upperPoints[index-1]
