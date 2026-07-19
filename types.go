@@ -77,11 +77,10 @@ const (
 type StrokeStyle struct {
 	Color color.Color
 	Width float32
-	Dash  []float32
 }
 
-// FillStyle describes the interior of a rendered mark. Opacity is clamped to
-// the range zero through one.
+// FillStyle describes the interior of a rendered mark. An opacity greater than
+// zero is clamped to one; zero uses the mark's default opacity.
 type FillStyle struct {
 	Color   color.Color
 	Opacity float32

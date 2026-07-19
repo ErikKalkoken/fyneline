@@ -201,6 +201,18 @@ func numericAxis(widget fyne.Widget, plot plotRect, axis NumericAxis, domain Dom
 		}
 		objects = append(objects, text)
 	}
+	if axis.label != "" {
+		text := canvas.NewText(axis.label, labelColor)
+		text.TextSize = textSize
+		text.TextStyle = fyne.TextStyle{Bold: true}
+		measured := fyne.MeasureText(axis.label, textSize, text.TextStyle)
+		if horizontal {
+			text.Move(fyne.NewPos(plot.left+(plot.width()-measured.Width)/2, plot.bottom+18))
+		} else {
+			text.Move(fyne.NewPos(max(plot.left-measured.Width-6, 0), plot.top))
+		}
+		objects = append(objects, text)
+	}
 	return objects
 }
 
@@ -246,6 +258,45 @@ func renderCategoryAxis(widget fyne.Widget, plot plotRect, axis CategoryAxis, ca
 			text.Move(fyne.NewPos(plot.left-measured.Width-6, y-measured.Height/2))
 		}
 		objects = append(objects, text)
+	}
+	if axis.label != "" {
+		text := canvas.NewText(axis.label, labelColor)
+		text.TextSize = textSize
+		text.TextStyle = fyne.TextStyle{Bold: true}
+		measured := fyne.MeasureText(axis.label, textSize, text.TextStyle)
+		if horizontal {
+			text.Move(fyne.NewPos(plot.left+(plot.width()-measured.Width)/2, plot.bottom+18))
+		} else {
+			text.Move(fyne.NewPos(max(plot.left-measured.Width-6, 0), plot.top))
+		}
+		objects = append(objects, text)
+	}
+	return objects
+}
+
+func categoryGrid(widget fyne.Widget, plot plotRect, axis CategoryAxis, count int, horizontal bool) []fyne.CanvasObject {
+	if !axis.grid || count == 0 {
+		return nil
+	}
+	lineColor := axis.style.GridColor
+	if lineColor == nil {
+		lineColor = withOpacity(theme.ColorForWidget(theme.ColorNameSeparator, widget), 0.35)
+	}
+	objects := make([]fyne.CanvasObject, 0, count)
+	for index := 0; index < count; index++ {
+		fraction := (float32(index) + 0.5) / float32(count)
+		line := canvas.NewLine(lineColor)
+		line.StrokeWidth = 1
+		if horizontal {
+			x := plot.left + fraction*plot.width()
+			line.Position1 = fyne.NewPos(x, plot.top)
+			line.Position2 = fyne.NewPos(x, plot.bottom)
+		} else {
+			y := plot.top + fraction*plot.height()
+			line.Position1 = fyne.NewPos(plot.left, y)
+			line.Position2 = fyne.NewPos(plot.right, y)
+		}
+		objects = append(objects, line)
 	}
 	return objects
 }

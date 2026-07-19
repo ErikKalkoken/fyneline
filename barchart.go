@@ -123,19 +123,20 @@ func (c *BarChart[T]) CreateRenderer() fyne.WidgetRenderer {
 func (c *BarChart[T]) chartMinSize() fyne.Size { return c.minimumSize }
 
 func (c *BarChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
-	categories, rows := c.categoryRows()
+	categories, rows, present := c.categoryRows()
 	xVisible := c.categoryAxis.visible
 	yVisible := c.valueAxis.visible
 	if c.orientation == BarHorizontal {
 		xVisible, yVisible = c.valueAxis.visible, c.categoryAxis.visible
 	}
 	plot := cartesianPlot(size, c.padding, xVisible, yVisible)
-	values, defined := c.barValues(rows)
+	values, defined := c.barValues(rows, present)
 	lower, upper := barStack(values, defined, c.seriesLayout)
 	minimum, maximum := barExtents(lower, upper, defined)
 	domain := numericDomain(c.valueAxis, minimum, maximum, true)
 
 	objects := make([]fyne.CanvasObject, 0, len(categories)*max(len(c.series), 1)+24)
+	objects = append(objects, categoryGrid(c, plot, c.categoryAxis, len(categories), c.orientation == BarVertical)...)
 	if c.valueAxis.grid {
 		objects = append(objects, numericGrid(c, plot, c.valueAxis, domain, c.orientation == BarHorizontal)...)
 	}
@@ -147,7 +148,7 @@ func (c *BarChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 	return objects
 }
 
-func (c *BarChart[T]) categoryRows() ([]string, []T) {
+func (c *BarChart[T]) categoryRows() ([]string, []T, []bool) {
 	byCategory := make(map[string]T, len(c.data))
 	seen := make(map[string]bool, len(c.data))
 	categories := make([]string, 0, len(c.data))
@@ -163,19 +164,23 @@ func (c *BarChart[T]) categoryRows() ([]string, []T) {
 		categories = append([]string(nil), c.categoryAxis.categories...)
 	}
 	rows := make([]T, len(categories))
+	present := make([]bool, len(categories))
 	for index, category := range categories {
-		rows[index] = byCategory[category]
+		rows[index], present[index] = byCategory[category]
 	}
-	return categories, rows
+	return categories, rows, present
 }
 
-func (c *BarChart[T]) barValues(rows []T) ([][]float64, [][]bool) {
+func (c *BarChart[T]) barValues(rows []T, present []bool) ([][]float64, [][]bool) {
 	values := make([][]float64, len(c.series))
 	defined := make([][]bool, len(c.series))
 	for seriesIndex, series := range c.series {
 		values[seriesIndex] = make([]float64, len(rows))
 		defined[seriesIndex] = make([]bool, len(rows))
 		for rowIndex, datum := range rows {
+			if !present[rowIndex] {
+				continue
+			}
 			value, ok := series.value(datum)
 			ok = ok && finite(value)
 			values[seriesIndex][rowIndex] = value
