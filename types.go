@@ -120,6 +120,12 @@ type ArcStyle struct {
 	Stroke StrokeStyle
 }
 
+// LabelStyle controls text label color and size.
+type LabelStyle struct {
+	Color    color.Color
+	TextSize float32
+}
+
 // Palette returns an index-based color accessor that cycles through colors.
 // A palette with no colors always returns nil.
 func Palette(colors ...color.Color) func(index int) color.Color {

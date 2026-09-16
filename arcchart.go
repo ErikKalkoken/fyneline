@@ -27,6 +27,7 @@ type ArcChart[T any] struct {
 	maxValue     float64
 	hasMaxValue  bool
 	labels       bool
+	labelStyle   LabelStyle
 	padding      Insets
 	minimumSize  fyne.Size
 }
@@ -123,6 +124,13 @@ func (c *ArcChart[T]) SetLabels(visible bool) *ArcChart[T] {
 	return c
 }
 
+// SetLabelStyle sets the color and text size of arc-centroid labels.
+func (c *ArcChart[T]) SetLabelStyle(style LabelStyle) *ArcChart[T] {
+	c.labelStyle = style
+	c.Refresh()
+	return c
+}
+
 // SetPadding sets logical-pixel insets around the chart.
 func (c *ArcChart[T]) SetPadding(padding Insets) *ArcChart[T] {
 	c.padding = padding
@@ -161,6 +169,14 @@ func (c *ArcChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 	if domainTotal <= 0 || diameter <= 0 {
 		return nil
 	}
+	labelColor := c.labelStyle.Color
+	if labelColor == nil {
+		labelColor = theme.ColorForWidget(theme.ColorNameForeground, c)
+	}
+	labelTextSize := c.labelStyle.TextSize
+	if labelTextSize <= 0 {
+		labelTextSize = theme.CurrentForWidget(c).Size(theme.SizeNameCaptionText)
+	}
 	span := c.endAngle - c.startAngle
 	current := c.startAngle
 	objects := make([]fyne.CanvasObject, 0, len(c.data)*2)
@@ -193,8 +209,8 @@ func (c *ArcChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 		objects = append(objects, arc)
 		if c.labels && c.label != nil {
 			label := c.label(datum)
-			text := canvas.NewText(label, theme.ColorForWidget(theme.ColorNameForeground, c))
-			text.TextSize = theme.CurrentForWidget(c).Size(theme.SizeNameCaptionText)
+			text := canvas.NewText(label, labelColor)
+			text.TextSize = labelTextSize
 			angle := (start + end) / 2 * math.Pi / 180
 			radius := float64(diameter) * float64((1+c.innerRadius)/4)
 			position := fyne.NewPos(

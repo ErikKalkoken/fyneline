@@ -118,6 +118,38 @@ func TestArcChartSkipsNonPositiveValuesAndRendersLabels(t *testing.T) {
 	}
 }
 
+func TestArcChartLabelStyleSetsColorAndTextSize(t *testing.T) {
+	test.NewTempApp(t)
+	data := []testDatum{
+		{category: "A", a: 2},
+		{category: "B", a: 3},
+	}
+	labelColor := color.NRGBA{R: 10, G: 20, B: 30, A: 255}
+	chart := NewArcChart(data,
+		func(d testDatum) float64 { return d.a },
+		func(d testDatum) string { return d.category },
+	).SetLabels(true).SetLabelStyle(LabelStyle{Color: labelColor, TextSize: 24})
+
+	objects := renderObjects(t, chart)
+	found := 0
+	for _, object := range objects {
+		text, ok := object.(*canvas.Text)
+		if !ok {
+			continue
+		}
+		found++
+		if text.Color != labelColor {
+			t.Fatalf("label color = %v, want %v", text.Color, labelColor)
+		}
+		if text.TextSize != 24 {
+			t.Fatalf("label text size = %v, want 24", text.TextSize)
+		}
+	}
+	if found != 2 {
+		t.Fatalf("rendered %d labels, want 2", found)
+	}
+}
+
 func TestSplineRendersMonotoneSegments(t *testing.T) {
 	test.NewTempApp(t)
 	data := []testDatum{{x: 0, a: 1}, {x: 1, a: 3}, {x: 2, a: 2}}
