@@ -16,6 +16,7 @@ type BarChart[T any] struct {
 	data         []T
 	category     func(T) string
 	series       []BarSeries[T]
+	style        func(BarStyle, int) BarStyle
 	orientation  BarOrientation
 	seriesLayout SeriesLayout
 	bandPadding  float32
@@ -53,6 +54,16 @@ func (c *BarChart[T]) SetData(data []T) *BarChart[T] {
 // SetSeries replaces the displayed series and refreshes the widget.
 func (c *BarChart[T]) SetSeries(series ...BarSeries[T]) *BarChart[T] {
 	c.series = append([]BarSeries[T](nil), series...)
+	c.Refresh()
+	return c
+}
+
+// SetStyle installs a callback that adjusts each series' style at render
+// time, given its style as configured on the series and its index. It lets a
+// theme change restyle a chart without recreating its series: mutate what
+// the callback captures and call Refresh.
+func (c *BarChart[T]) SetStyle(style func(BarStyle, int) BarStyle) *BarChart[T] {
+	c.style = style
 	c.Refresh()
 	return c
 }
@@ -227,6 +238,9 @@ func (c *BarChart[T]) renderBars(plot plotRect, domain Domain, values, lower, up
 			}
 			bandStart := float32(categoryIndex)*bandSlot + (bandSlot-categoryBand)/2 + barOffset
 			style := series.style
+			if c.style != nil {
+				style = c.style(style, seriesIndex)
+			}
 			opacity := style.Fill.Opacity
 			if opacity <= 0 {
 				opacity = 1

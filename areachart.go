@@ -16,6 +16,7 @@ type AreaChart[T any] struct {
 	data         []T
 	x            func(T) float64
 	series       []AreaSeries[T]
+	style        func(AreaStyle, int) AreaStyle
 	xAxis        NumericAxis
 	yAxis        NumericAxis
 	curve        Curve
@@ -70,6 +71,16 @@ func (c *AreaChart[T]) SetYAxis(axis NumericAxis) *AreaChart[T] {
 	return c
 }
 
+// SetStyle installs a callback that adjusts each series' style at render
+// time, given its style as configured on the series and its index. It lets a
+// theme change restyle a chart without recreating its series: mutate what
+// the callback captures and call Refresh.
+func (c *AreaChart[T]) SetStyle(style func(AreaStyle, int) AreaStyle) *AreaChart[T] {
+	c.style = style
+	c.Refresh()
+	return c
+}
+
 // SetCurve selects linear, monotone, or stepped interpolation.
 func (c *AreaChart[T]) SetCurve(curve Curve) *AreaChart[T] {
 	c.curve = curve
@@ -117,14 +128,18 @@ func (c *AreaChart[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 	objects := renderNumericAxes(c, plot, c.xAxis, c.yAxis, xDomain, yDomain)
 	for seriesIndex, series := range c.series {
 		segments := areaPointSegments(xValues, lower[seriesIndex], upper[seriesIndex], defined[seriesIndex], c.gapPolicy, plot, xDomain, yDomain)
-		fillOpacity := series.style.Fill.Opacity
+		style := series.style
+		if c.style != nil {
+			style = c.style(style, seriesIndex)
+		}
+		fillOpacity := style.Fill.Opacity
 		if fillOpacity <= 0 {
 			fillOpacity = 0.3
 		}
-		baseColor := seriesColor(c, seriesIndex, series.style.Fill.Color)
+		baseColor := seriesColor(c, seriesIndex, style.Fill.Color)
 		fill := withOpacity(baseColor, fillOpacity)
-		stroke := seriesColor(c, seriesIndex, series.style.Stroke.Color)
-		strokeWidth := series.style.Stroke.Width
+		stroke := seriesColor(c, seriesIndex, style.Stroke.Color)
+		strokeWidth := style.Stroke.Width
 		if strokeWidth <= 0 {
 			strokeWidth = 2
 		}

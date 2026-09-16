@@ -351,3 +351,212 @@ func countObjects[T fyne.CanvasObject](objects []fyne.CanvasObject) int {
 	}
 	return count
 }
+
+func colorsEqual(a, b color.Color) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	ar, ag, ab, aa := a.RGBA()
+	br, bg, bb, ba := b.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
+}
+
+func TestSplineSetStyleOverridesColorWithoutRecreatingSeries(t *testing.T) {
+	test.NewTempApp(t)
+	red := color.NRGBA{R: 255, A: 255}
+	data := []testDatum{{x: 0, a: 1}, {x: 1, a: 2}}
+	chart := NewSpline(data,
+		func(d testDatum) float64 { return d.x },
+		NewSplineSeries("A", func(d testDatum) float64 { return d.a }).WithWidth(3),
+	)
+
+	chart.SetStyle(func(style SplineStyle, index int) SplineStyle {
+		style.Stroke.Color = red
+		return style
+	})
+
+	found := false
+	for _, object := range renderObjects(t, chart) {
+		line, ok := object.(*canvas.Line)
+		if !ok || !colorsEqual(line.StrokeColor, red) {
+			continue
+		}
+		found = true
+		if line.StrokeWidth != 3 {
+			t.Fatalf("stroke width = %v, want unchanged 3", line.StrokeWidth)
+		}
+	}
+	if !found {
+		t.Fatal("no rendered line used the color set via SetStyle")
+	}
+}
+
+func TestSplineSetStyleReceivesSeriesIndex(t *testing.T) {
+	test.NewTempApp(t)
+	red := color.NRGBA{R: 255, A: 255}
+	blue := color.NRGBA{B: 255, A: 255}
+	chart := NewSpline([]testDatum{{x: 0, a: 1}, {x: 1, a: 2}},
+		func(d testDatum) float64 { return d.x },
+		NewSplineSeries("A", func(d testDatum) float64 { return d.a }),
+		NewSplineSeries("B", func(d testDatum) float64 { return d.a }),
+	)
+
+	chart.SetStyle(func(style SplineStyle, index int) SplineStyle {
+		if index == 0 {
+			style.Stroke.Color = red
+		} else {
+			style.Stroke.Color = blue
+		}
+		return style
+	})
+
+	sawRed, sawBlue := false, false
+	for _, object := range renderObjects(t, chart) {
+		line, ok := object.(*canvas.Line)
+		if !ok {
+			continue
+		}
+		if colorsEqual(line.StrokeColor, red) {
+			sawRed = true
+		}
+		if colorsEqual(line.StrokeColor, blue) {
+			sawBlue = true
+		}
+	}
+	if !sawRed || !sawBlue {
+		t.Fatalf("expected both series colors to render: red=%v blue=%v", sawRed, sawBlue)
+	}
+}
+
+func TestBarChartSetStyleOverridesFillWithoutRecreatingSeries(t *testing.T) {
+	test.NewTempApp(t)
+	green := color.NRGBA{G: 255, A: 255}
+	data := []testDatum{{category: "A", a: 2}}
+	chart := NewBarChart(data,
+		func(d testDatum) string { return d.category },
+		NewBarSeries("A", func(d testDatum) float64 { return d.a }).WithStyle(BarStyle{CornerRadius: 4}),
+	)
+
+	chart.SetStyle(func(style BarStyle, index int) BarStyle {
+		style.Fill.Color = green
+		return style
+	})
+
+	found := false
+	for _, object := range renderObjects(t, chart) {
+		bar, ok := object.(*canvas.Rectangle)
+		if !ok {
+			continue
+		}
+		if bar.CornerRadius != 4 {
+			t.Fatalf("corner radius = %v, want unchanged 4", bar.CornerRadius)
+		}
+		if colorsEqual(bar.FillColor, green) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no rendered bar used the color set via SetStyle")
+	}
+}
+
+func TestBarChartSetStyleReceivesSeriesIndex(t *testing.T) {
+	test.NewTempApp(t)
+	green := color.NRGBA{G: 255, A: 255}
+	orange := color.NRGBA{R: 255, G: 165, A: 255}
+	chart := NewBarChart([]testDatum{{category: "A", a: 2, b: 3}},
+		func(d testDatum) string { return d.category },
+		NewBarSeries("A", func(d testDatum) float64 { return d.a }),
+		NewBarSeries("B", func(d testDatum) float64 { return d.b }),
+	)
+
+	chart.SetStyle(func(style BarStyle, index int) BarStyle {
+		if index == 0 {
+			style.Fill.Color = green
+		} else {
+			style.Fill.Color = orange
+		}
+		return style
+	})
+
+	sawGreen, sawOrange := false, false
+	for _, object := range renderObjects(t, chart) {
+		bar, ok := object.(*canvas.Rectangle)
+		if !ok {
+			continue
+		}
+		if colorsEqual(bar.FillColor, green) {
+			sawGreen = true
+		}
+		if colorsEqual(bar.FillColor, orange) {
+			sawOrange = true
+		}
+	}
+	if !sawGreen || !sawOrange {
+		t.Fatalf("expected both series colors to render: green=%v orange=%v", sawGreen, sawOrange)
+	}
+}
+
+func TestAreaChartSetStyleOverridesFillWithoutRecreatingSeries(t *testing.T) {
+	test.NewTempApp(t)
+	orange := color.NRGBA{R: 255, G: 165, A: 255}
+	data := []testDatum{{x: 0, a: 1}, {x: 1, a: 2}}
+	chart := NewAreaChart(data,
+		func(d testDatum) float64 { return d.x },
+		NewAreaSeries("A", func(d testDatum) float64 { return d.a }).WithStyle(AreaStyle{
+			Fill: FillStyle{Opacity: 1},
+		}),
+	)
+
+	chart.SetStyle(func(style AreaStyle, index int) AreaStyle {
+		style.Fill.Color = orange
+		return style
+	})
+
+	found := false
+	for _, object := range renderObjects(t, chart) {
+		if polygon, ok := object.(*canvas.ArbitraryPolygon); ok && colorsEqual(polygon.FillColor, orange) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no rendered area polygon used the color set via SetStyle")
+	}
+}
+
+func TestAreaChartSetStyleReceivesSeriesIndex(t *testing.T) {
+	test.NewTempApp(t)
+	orange := color.NRGBA{R: 255, G: 165, A: 255}
+	blue := color.NRGBA{B: 255, A: 255}
+	chart := NewAreaChart([]testDatum{{x: 0, a: 1}, {x: 1, a: 2}},
+		func(d testDatum) float64 { return d.x },
+		NewAreaSeries("A", func(d testDatum) float64 { return d.a }).WithStyle(AreaStyle{Fill: FillStyle{Opacity: 1}}),
+		NewAreaSeries("B", func(d testDatum) float64 { return d.a }).WithStyle(AreaStyle{Fill: FillStyle{Opacity: 1}}),
+	)
+
+	chart.SetStyle(func(style AreaStyle, index int) AreaStyle {
+		if index == 0 {
+			style.Fill.Color = orange
+		} else {
+			style.Fill.Color = blue
+		}
+		return style
+	})
+
+	sawOrange, sawBlue := false, false
+	for _, object := range renderObjects(t, chart) {
+		polygon, ok := object.(*canvas.ArbitraryPolygon)
+		if !ok {
+			continue
+		}
+		if colorsEqual(polygon.FillColor, orange) {
+			sawOrange = true
+		}
+		if colorsEqual(polygon.FillColor, blue) {
+			sawBlue = true
+		}
+	}
+	if !sawOrange || !sawBlue {
+		t.Fatalf("expected both series colors to render: orange=%v blue=%v", sawOrange, sawBlue)
+	}
+}

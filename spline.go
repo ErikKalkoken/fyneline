@@ -17,6 +17,7 @@ type Spline[T any] struct {
 	data        []T
 	x           func(T) float64
 	series      []SplineSeries[T]
+	style       func(SplineStyle, int) SplineStyle
 	xAxis       NumericAxis
 	yAxis       NumericAxis
 	curve       Curve
@@ -52,6 +53,16 @@ func (c *Spline[T]) SetData(data []T) *Spline[T] {
 // SetSeries replaces the displayed series and refreshes the widget.
 func (c *Spline[T]) SetSeries(series ...SplineSeries[T]) *Spline[T] {
 	c.series = append([]SplineSeries[T](nil), series...)
+	c.Refresh()
+	return c
+}
+
+// SetStyle installs a callback that adjusts each series' style at render
+// time, given its style as configured on the series and its index. It lets a
+// theme change restyle a chart without recreating its series: mutate what
+// the callback captures and call Refresh.
+func (c *Spline[T]) SetStyle(style func(SplineStyle, int) SplineStyle) *Spline[T] {
+	c.style = style
 	c.Refresh()
 	return c
 }
@@ -106,8 +117,12 @@ func (c *Spline[T]) chartObjects(size fyne.Size) []fyne.CanvasObject {
 	objects := renderNumericAxes(c, plot, c.xAxis, c.yAxis, xDomain, yDomain)
 	for seriesIndex, series := range c.series {
 		segments := pointSegments(xValues, yValues[seriesIndex], defined[seriesIndex], c.gapPolicy, plot, xDomain, yDomain)
-		stroke := seriesColor(c, seriesIndex, series.style.Stroke.Color)
-		width := series.style.Stroke.Width
+		style := series.style
+		if c.style != nil {
+			style = c.style(style, seriesIndex)
+		}
+		stroke := seriesColor(c, seriesIndex, style.Stroke.Color)
+		width := style.Stroke.Width
 		if width <= 0 {
 			width = 2
 		}
